@@ -3285,7 +3285,11 @@ subroutine  wannier_center3D_weyl
          write(outfileindex, '(a)')'set xrange [0: 1.0]'
          write(outfileindex, '(a)')'set yrange [0:1]'
          write(outfileindex, '(a,i5,a)')"plot 'wanniercenter3D_Weyl.dat' u 1:",i+1, &
-            " w p ps 1.5 pt 7 lw 10 lc rgb '#696969'"
+            " w p ps 1.5 pt 7 lw 10 lc rgb '#696969', \"
+         do j=1, NumberofSelectedOccupiedBands
+            write(outfileindex, '(a,i5,a)')"'wanniercenter3D_Weyl.dat' u 1:",(i-1)*NumberofSelectedOccupiedBands+j+Num_Weyls+1, &
+               " w p ps 1.5 pt 7 lw 7 lc 'red', \"  
+         enddo
          close(outfileindex)
       endif
    enddo

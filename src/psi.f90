@@ -8,17 +8,18 @@
      implicit none 
 
      ! loop index
-     integer     :: i,j, mdim, ib, iband, it, ia
+     integer     :: i,j, mdim, ib, iband, it, ia,iproj
 
      ! wave vector 
      real(Dp)    :: k(2)
       
      ! eigenvalue 
-     real(Dp), allocatable   :: W(:)
+     real(Dp), allocatable   :: W(:), wband(:)
      
      !> norm of psi |\psi|^2
      real(Dp), allocatable   :: psi2  (:, :)
      real(Dp), allocatable   :: psi_atom  (:, :)
+     complex(Dp), allocatable   :: psi_proj  (:, :)
 
      !> wave function for the given band and k point
      complex(Dp), allocatable:: psi(:, :)
@@ -30,15 +31,17 @@
 
      allocate(psi2(Nslab, NumberofSelectedBands))
      allocate(psi_atom(Nslab*Origin_cell%Num_atoms, NumberofSelectedBands))
+     allocate(psi_proj(mdim, NumberofSelectedBands))
      allocate(psi (mdim, 1))
      allocate(W(mdim))
+     allocate(wband(NumberofSelectedBands))
      allocate(hamk_slab(mdim,mdim), hamk_slab_t(mdim,mdim))
-     psi2=0d0;  psi=0d0; W=0d0
+     psi2=0d0;  psi=0d0; W=0d0; wband=0d0
      ! psi_atom = 0d0
      hamk_slab_t= 0d0; hamk_slab= 0d0
 
 
-     !> Single_KPOINT_2D_DIRECT is provided in the wt.in or input.dat
+     !> Single_KPOINT_2D_DIRECT is provided in the pn.in or input.dat
      k= Single_KPOINT_2D_DIRECT
      hamk_slab=0.0d0 
 
@@ -59,9 +62,10 @@
         call zheevx_pack('V', 'U', mdim, iband, iband, hamk_slab_t, W, psi)
 
         W = sign(1.0d0,W)*SQRT(abs(W))/eV2Hartree
-       
+        wband(ib) = W(1)
         if (cpuid.eq.0) write(stdout,'(2X, a, i8, a, f16.6)') 'Eigenvalue for band ', iband, ' is', W(1)
-   
+        psi_proj(:,ib) = psi(:,1)
+        !print *,ib, psi(:,1)
         j=0
         do i=1,Nslab
            do j=1,Num_wann
@@ -90,20 +94,39 @@
      outfileindex= outfileindex+ 1
      if (cpuid==0) then
         open(unit=outfileindex, file='psi_abs.txt')
-        write(outfileindex, '(a8, a5, 2000i16 )')'#islab', 'band', Selected_band_index(:)
+        write(outfileindex, '(a8, a5, 2000i16 )')'#islab \', 'band', Selected_band_index(:)
+        write(outfileindex,'(a12, 1X, 2000f16.9)') 'Freq (THz)',  wband(:)
         do i=1,Nslab
            write(outfileindex,'(i8, 5X, 2000f16.9)')i,psi2(i, :)
         enddo
         close(outfileindex)
-        write(stdout,*) '<< Calculating psi done'
+        !write(stdout,*) '<< Calculating psi done'
      endif
 
      outfileindex= outfileindex+ 1
      if (cpuid==0) then
         open(unit=outfileindex, file='psi_atom.txt')
-        write(outfileindex, '(a8, a5, 2000i16 )')'#islab', 'band', Selected_band_index(:)
+        write(outfileindex, '(a8, a5, 2000i16 )')'#iatom \', 'band', Selected_band_index(:)
+        write(outfileindex,'(a12, 1X, 2000f16.9)') 'Freq (THz)',  wband(:)
         do i=1,Nslab*Origin_cell%Num_atoms 
            write(outfileindex,'(i8, 5X, 2000f16.9)')i,psi_atom(i, :)
+        enddo
+        close(outfileindex)
+        !write(stdout,*) '<< Calculating psi done'
+     endif
+
+     outfileindex= outfileindex+ 1
+     if (cpuid==0) then
+        open(unit=outfileindex, file='psi_cart.txt')
+        write(outfileindex, '(a8, a5, 2000i16 )')'#iatom \', 'band', Selected_band_index(:)
+        write(outfileindex,'(a12, 1X, 2000f16.9)') 'Freq (THz)',  wband(:)
+        do i=1,Nslab*Origin_cell%Num_atoms 
+           write(outfileindex,'(i8, a2, 3X, 2000f16.9)')i,'xR',REAL(psi_proj(3*(i-1)+1, :))
+           write(outfileindex,'(i8, a2, 3X, 2000f16.9)')i,'xI',IMAG(psi_proj(3*(i-1)+1, :))
+           write(outfileindex,'(i8, a2, 3X, 2000f16.9)')i,'yR',REAL(psi_proj(3*(i-1)+2, :))
+           write(outfileindex,'(i8, a2, 3X, 2000f16.9)')i,'yI',IMAG(psi_proj(3*(i-1)+2, :))
+           write(outfileindex,'(i8, a2, 3X, 2000f16.9)')i,'zR',REAL(psi_proj(3*(i-1)+3, :))
+           write(outfileindex,'(i8, a2, 3X, 2000f16.9)')i,'zI',IMAG(psi_proj(3*(i-1)+3, :))
         enddo
         close(outfileindex)
         write(stdout,*) '<< Calculating psi done'
@@ -112,8 +135,10 @@
      deallocate(psi2)
      deallocate(psi )
      deallocate(psi_atom)
+     deallocate(psi_proj)
      deallocate(hamk_slab)
-
+     deallocate(wband)
+     deallocate(W)
      return
     
   end subroutine psik_slab
